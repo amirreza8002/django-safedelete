@@ -27,7 +27,7 @@ except ImportError:
 
 def highlight_deleted(obj):
     """
-        Display in red lines when object is deleted.
+    Display in red lines when object is deleted.
     """
     obj_str = conditional_escape(text_type(obj))
     if not getattr(obj, FIELD_NAME, False):
@@ -41,15 +41,16 @@ highlight_deleted.short_description = _("Name")  # type: ignore
 
 class SafeDeleteAdminFilter(admin.SimpleListFilter):
     """
-        Filters objects by whether or not they have been deleted
+    Filters objects by whether or not they have been deleted
     """
+
     title = _("Deleted")
     parameter_name = FIELD_NAME
 
     def lookups(self, request, model_admin):
         lookups = (
-            (self.parameter_name, _('All (Including Deleted)')),
-            (self.parameter_name + "_only", _('Deleted Only')),
+            (self.parameter_name, _("All (Including Deleted)")),
+            (self.parameter_name + "_only", _("Deleted Only")),
         )
         return lookups
 
@@ -59,7 +60,7 @@ class SafeDeleteAdminFilter(admin.SimpleListFilter):
             return queryset
         elif self.value() == self.parameter_name + "_only":
             parameter_is_null = False
-        return queryset.filter(**{self.parameter_name + '__isnull': parameter_is_null})
+        return queryset.filter(**{self.parameter_name + "__isnull": parameter_is_null})
 
 
 class SafeDeleteAdmin(admin.ModelAdmin):
@@ -77,19 +78,24 @@ class SafeDeleteAdmin(admin.ModelAdmin):
         ...
         ... ContactAdmin.highlight_deleted_field.short_description = ContactAdmin.field_to_highlight
     """
-    undelete_selected_confirmation_template = "safedelete/undelete_selected_confirmation.html"
-    hard_delete_selected_confirmation_template = "safedelete/hard_delete_selected_confirmation.html"
+
+    undelete_selected_confirmation_template = (
+        "safedelete/undelete_selected_confirmation.html"
+    )
+    hard_delete_selected_confirmation_template = (
+        "safedelete/hard_delete_selected_confirmation.html"
+    )
 
     list_display = (FIELD_NAME,)
     list_filter = (FIELD_NAME,)
-    actions = ('undelete_selected', 'hard_delete_soft_deleted')
+    actions = ("undelete_selected", "hard_delete_soft_deleted")
 
     class Meta:
         abstract = True
 
     class Media:
         css = {
-            'all': ('safedelete/admin.css',),
+            "all": ("safedelete/admin.css",),
         }
 
     def queryset(self, request):
@@ -110,53 +116,62 @@ class SafeDeleteAdmin(admin.ModelAdmin):
             queryset = queryset.order_by(*ordering)
         return queryset
 
-    def log_undeletion(self, request, obj, object_repr):
+    def log_undeletion(self, request, queryset):
         """
         Log that an object will be undeleted.
 
         The default implementation creates an admin LogEntry object.
         """
-        LogEntry.objects.log_action(
-            user_id=request.user.pk,
-            content_type_id=ContentType.objects.get_for_model(self.model).pk,
-            object_id=obj.pk,
-            object_repr=object_repr,
-            action_flag=CHANGE
-        )
+        if int(django.get_version()[0]) >= 6:
+            LogEntry.objects.log_actions(
+                user_id=request.user.pk, queryset=queryset, action_flag=CHANGE
+            )
+        else:
+            for obj in queryset:
+                obj_display = force_str(obj)
+                LogEntry.objects.log_action(
+                    user_id=request.user.pk,
+                    content_type_id=ContentType.objects.get_for_model(self.model).pk,
+                    object_id=obj.pk,
+                    object_repr=obj_display,
+                    action_flag=CHANGE,
+                )
 
     def undelete_selected(self, request, queryset):
-        """ Admin action to undelete objects in bulk with confirmation. """
+        """Admin action to undelete objects in bulk with confirmation."""
         if not self.has_delete_permission(request):
             raise PermissionDenied
-        assert hasattr(queryset, 'undelete')
+        assert hasattr(queryset, "undelete")
 
         # Remove not deleted item from queryset
-        queryset = queryset.filter(**{FIELD_NAME + '__isnull': False})
+        queryset = queryset.filter(**{FIELD_NAME + "__isnull": False})
         # Undeletion confirmed
-        if request.POST.get('post'):
+        if request.POST.get("post"):
             requested = queryset.count()
             if requested:
-                for obj in queryset:
-                    obj_display = force_str(obj)
-                    self.log_undeletion(request, obj, obj_display)
+                self.log_undeletion(request, queryset=queryset)
                 changed = queryset.undelete()[0]
                 if changed < requested:
                     self.message_user(
                         request,
-                        _("Successfully undeleted %(count_changed)d of the "
-                          "%(count_requested)d selected %(items)s.") % {
+                        _(
+                            "Successfully undeleted %(count_changed)d of the "
+                            "%(count_requested)d selected %(items)s."
+                        )
+                        % {
                             "count_requested": requested,
                             "count_changed": changed,
-                            "items": model_ngettext(self.opts, requested)
+                            "items": model_ngettext(self.opts, requested),
                         },
                         messages.WARNING,
                     )
                 else:
                     self.message_user(
                         request,
-                        _("Successfully undeleted %(count)d %(items)s.") % {
+                        _("Successfully undeleted %(count)d %(items)s.")
+                        % {
                             "count": requested,
-                            "items": model_ngettext(self.opts, requested)
+                            "items": model_ngettext(self.opts, requested),
                         },
                         messages.SUCCESS,
                     )
@@ -173,16 +188,16 @@ class SafeDeleteAdmin(admin.ModelAdmin):
         related_list = [list(related_objects(obj)) for obj in queryset]
 
         context = {
-            'title': title,
-            'objects_name': objects_name,
-            'queryset': queryset,
+            "title": title,
+            "objects_name": objects_name,
+            "queryset": queryset,
             "opts": opts,
             "app_label": opts.app_label,
-            'action_checkbox_name': helpers.ACTION_CHECKBOX_NAME,
-            'related_list': related_list
+            "action_checkbox_name": helpers.ACTION_CHECKBOX_NAME,
+            "related_list": related_list,
         }
 
-        if parse_version(django.get_version()) < parse_version('1.10'):
+        if parse_version(django.get_version()) < parse_version("1.10"):
             return TemplateResponse(
                 request,
                 self.undelete_selected_confirmation_template,
@@ -262,7 +277,7 @@ class SafeDeleteAdmin(admin.ModelAdmin):
             "related_list": related_list,
         }
 
-        if parse_version(django.get_version()) < parse_version('1.10'):
+        if parse_version(django.get_version()) < parse_version("1.10"):
             return TemplateResponse(
                 request,
                 self.hard_delete_selected_confirmation_template,
@@ -280,7 +295,9 @@ class SafeDeleteAdmin(admin.ModelAdmin):
         try:
             field_str = getattr(obj, self.field_to_highlight)
         except TypeError:
-            raise ValueError("Must set field_to_highlight to your field's name (as a string)")
+            raise ValueError(
+                "Must set field_to_highlight to your field's name (as a string)"
+            )
 
         field_str = conditional_escape(text_type(field_str))
         if not getattr(obj, FIELD_NAME, False):
@@ -293,4 +310,6 @@ class SafeDeleteAdmin(admin.ModelAdmin):
     highlight_deleted_field.admin_order_field = "_highlighted_field"  # type: ignore
 
     undelete_selected.short_description = _("Undelete selected %(verbose_name_plural)s")  # type: ignore
-    hard_delete_soft_deleted.short_description = _("Hard delete selected soft deleted %(verbose_name_plural)s")  # type: ignore
+    hard_delete_soft_deleted.short_description = _(
+        "Hard delete selected soft deleted %(verbose_name_plural)s"
+    )  # type: ignore
